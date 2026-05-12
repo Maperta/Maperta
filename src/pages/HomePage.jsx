@@ -1,9 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import MapViewer from '../features/map/MapViewer';
-import TimelineControl from '../features/timeline/TimelineControl';
-import BuildingInfoCard from '../features/map/BuildingInfoCard';
 import useStore from '../lib/store';
+
+// ★ 懒加载地图组件（减少首屏加载时间）
+const MapViewer = lazy(() => import('../features/map/MapViewer'));
+const TimelineControl = lazy(() => import('../features/timeline/TimelineControl'));
+const BuildingInfoCard = lazy(() => import('../features/map/BuildingInfoCard'));
 
 export default function HomePage() {
   const [selectedBuilding, setSelectedBuilding] = useState(null);
@@ -26,20 +28,33 @@ export default function HomePage() {
 
   return (
     <div className="h-full w-full relative">
-      {/* 3D 地图 */}
-      <MapViewer onBuildingClick={handleBuildingClick} />
+      {/* 地图区域 - 带 loading */}
+      <Suspense
+        fallback={
+          <div className="h-full w-full flex flex-col items-center justify-center bg-[#0f0f1a] gap-4">
+            <div className="w-12 h-12 border-4 border-[#e94560]/30 border-t-[#e94560] rounded-full animate-spin" />
+            <p className="text-gray-400 text-sm">地图加载中...</p>
+          </div>
+        }
+      >
+        <MapViewer onBuildingClick={handleBuildingClick} />
+      </Suspense>
 
       {/* 建筑信息浮窗 */}
       {selectedBuilding && (
-        <BuildingInfoCard
-          building={selectedBuilding}
-          onClose={handleCloseCard}
-          onViewDetail={() => handleViewDetail(selectedBuilding.id)}
-        />
+        <Suspense fallback={null}>
+          <BuildingInfoCard
+            building={selectedBuilding}
+            onClose={handleCloseCard}
+            onViewDetail={() => handleViewDetail(selectedBuilding.id)}
+          />
+        </Suspense>
       )}
 
       {/* 时间轴 */}
-      <TimelineControl />
+      <Suspense fallback={null}>
+        <TimelineControl />
+      </Suspense>
     </div>
   );
 }

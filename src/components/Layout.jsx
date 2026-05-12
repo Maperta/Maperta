@@ -99,10 +99,10 @@ export default function Layout({ children }) {
         <div className="flex items-center gap-3">
           <Link
             to="/admin/editor"
-            className="text-xs text-gray-500 hover:text-gray-300 no-underline"
-            title="内容编辑器"
+            className="text-xs text-gray-400 hover:text-white no-underline border border-white/10 rounded px-2 py-1 hover:bg-white/5 transition-colors"
+            title={lang === 'zh' ? '内容编辑器' : 'Content Editor'}
           >
-            ✏️
+            ✏️ {lang === 'zh' ? '编辑' : 'Edit'}
           </Link>
           <button
             onClick={toggleLang}
