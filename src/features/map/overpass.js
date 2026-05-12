@@ -1,59 +1,60 @@
-// 深圳范围
 const SZ_BBOX = { south: 22.45, west: 113.75, north: 22.7, east: 114.3 };
 
-// Overpass API 查询深圳所有建筑，返回 GeoJSON FeatureCollection
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+];
+
 export async function fetchShenzhenBuildings() {
-  const query = `
-    [out:json][timeout:30];
-    (
-      way["building"](${SZ_BBOX.south},${SZ_BBOX.west},${SZ_BBOX.north},${SZ_BBOX.east});
-    );
-    out body;
-    >;
-    out skel qt;
-  `;
+  const query = `[out:json][timeout:60];
+(
+  way["building"](${SZ_BBOX.south},${SZ_BBOX.west},${SZ_BBOX.north},${SZ_BBOX.east});
+);
+out geom;`;
 
-  try {
-    const resp = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      body: query,
-    });
-    if (!resp.ok) throw new Error(`Overpass HTTP ${resp.status}`);
-    const data = await resp.json();
-    return overpassToGeoJSON(data);
-  } catch (err) {
-    console.warn('[Overpass] 查询失败，跳过补充数据:', err.message);
-    return null;
-  }
-}
-
-// 将 Overpass JSON 转换为 GeoJSON FeatureCollection
-function overpassToGeoJSON(data) {
-  const nodes = {};
-  const features = [];
-
-  // 先收集所有节点坐标
-  for (const el of data.elements) {
-    if (el.type === 'node') {
-      nodes[el.id] = [el.lon, el.lat];
+  // 尝试多个 Overpass 节点
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'data=' + encodeURIComponent(query),
+      });
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      return overpassToGeoJSON(data);
+    } catch (err) {
+      console.warn(`[Overpass] ${endpoint} 失败:`, err.message);
     }
   }
 
-  // 将 way 转为 Polygon feature
+  console.warn('[Overpass] 所有节点查询失败，跳过补充数据');
+  return null;
+}
+
+function overpassToGeoJSON(data) {
+  const features = [];
+
   for (const el of data.elements) {
     if (el.type !== 'way' || !el.tags?.building) continue;
+    if (!el.geometry?.length || el.geometry.length < 3) continue;
 
-    const coords = el.nodes.map((nid) => nodes[nid]).filter(Boolean);
-    if (coords.length < 3) continue;
+    const coords = el.geometry.map((p) => [p.lon, p.lat]);
 
     // 确保多边形闭合
     if (coords[0][0] !== coords[coords.length - 1][0] ||
         coords[0][1] !== coords[coords.length - 1][1]) {
-      coords.push(coords[0]);
+      coords.push([...coords[0]]);
     }
 
-    // 提取高度
-    let height = 10; // 默认10米
+    // 简化坐标精度（减少数据量）
+    const simplified = coords.map((c) => [
+      Math.round(c[0] * 100000) / 100000,
+      Math.round(c[1] * 100000) / 100000,
+    ]);
+
+    let height = 10;
     if (el.tags.height) {
       height = parseFloat(el.tags.height) || 10;
     } else if (el.tags['building:levels']) {
@@ -69,13 +70,10 @@ function overpassToGeoJSON(data) {
       },
       geometry: {
         type: 'Polygon',
-        coordinates: [coords],
+        coordinates: [simplified],
       },
     });
   }
 
-  return {
-    type: 'FeatureCollection',
-    features,
-  };
+  return { type: 'FeatureCollection', features };
 }
