@@ -5,15 +5,15 @@ import useStore from '../../lib/store';
 import { fetchShenzhenBuildings } from './overpass';
 
 const SZ_CENTER = { lng: 114.07, lat: 22.55 };
-const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
-const VERSA_TILES = 'https://tiles.versatiles.org/tiles/osm/{z}/{x}/{y}.mvt';
+// OpenFreeMap Liberty — 免费 OpenMapTiles schema，自带 3D 建筑（render_height/render_min_height）
+const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 
 export default function MapViewer({ onBuildingClick }) {
   const mapContainer = useRef(null);
   const mapRef = useRef(null);
+  const buildingLayerIds = useRef([]);
   const currentPeriod = useStore((s) => s.currentPeriod);
 
-  // 初始化地图
   useEffect(() => {
     if (mapRef.current) return;
 
@@ -21,8 +21,8 @@ export default function MapViewer({ onBuildingClick }) {
       container: mapContainer.current,
       style: MAP_STYLE,
       center: [SZ_CENTER.lng, SZ_CENTER.lat],
-      zoom: 12,
-      pitch: 55,
+      zoom: 14.5,
+      pitch: 60,
       bearing: 20,
       antialias: true,
     });
@@ -30,77 +30,47 @@ export default function MapViewer({ onBuildingClick }) {
     map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
 
-    map.on('load', async () => {
-      // 1. 地形
-      if (!map.getSource('terrain')) {
-        map.addSource('terrain', {
-          type: 'raster-dem',
-          url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
-          tileSize: 256,
-        });
-      }
-      try {
-        map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
-      } catch (e) {
-        console.warn('地形不可用:', e.message);
-      }
+    map.on('load', () => {
+      // 自动检测 Liberty 风格中的 fill-extrusion 建筑图层
+      const style = map.getStyle();
+      const extrusionIds = style.layers
+        .filter((l) => l.type === 'fill-extrusion' && l.id.includes('building'))
+        .map((l) => l.id);
+      buildingLayerIds.current = extrusionIds;
+      console.log('[Maperta] Liberty 3D建筑图层:', extrusionIds);
 
-      // 2. VersaTiles 矢量瓦片 → OSM 建筑
-      map.addSource('versatiles', {
-        type: 'vector',
-        tiles: [VERSA_TILES],
-        minzoom: 0,
-        maxzoom: 14,
-      });
-
-      // fill-extrusion 图层（OSM 建筑从瓦片挤出）
-      map.addLayer({
-        id: 'buildings-tiles',
-        type: 'fill-extrusion',
-        source: 'versatiles',
-        'source-layer': 'building',
-        filter: ['==', ['geometry-type'], 'Polygon'],
-        paint: {
-          'fill-extrusion-color': '#d0d0d0',
-          'fill-extrusion-height': [
-            'case',
-            ['has', 'height'],
-            ['coalesce', ['to-number', ['get', 'height']], 10],
-            ['has', 'building:levels'],
-            ['*', ['to-number', ['get', 'building:levels']], 3],
-            8,
-          ],
-          'fill-extrusion-base': 0,
-          'fill-extrusion-opacity': 0.8,
-        },
-        minzoom: 12,
-      });
-
-      // 3. 加载时间轴补充数据（不阻塞，立即执行）
+      // 加载时间轴补充数据
       loadPeriodBuildings(map, currentPeriod);
 
-      // 4. Overpass 补充数据（异步后台加载，不阻塞地图）
+      // 后台加载 Overpass 补充数据
       loadOverpassBuildings(map);
     });
 
-    // 点击建筑（两个图层都检测）
+    // 点击建筑 — 查询 Liberty 建筑层 + 我们的补充层
     map.on('click', (e) => {
-      const features = map.queryRenderedFeatures(e.point, {
-        layers: ['buildings-tiles', 'buildings-overpass-fill', 'buildings-period'],
-      });
+      const layers = [...buildingLayerIds.current, 'buildings-overpass-fill', 'buildings-period'];
+      const features = map.queryRenderedFeatures(e.point, { layers });
       if (!features.length) return;
 
       const feat = features[0];
       const props = feat.properties || {};
       const coords = getFeatureCenter(feat);
 
+      // Liberty 用 render_height（米），GeoJSON 用 height（像素需/4）
+      let height = 10;
+      if (props.render_height) {
+        height = Math.round(props.render_height);
+      } else if (props.height) {
+        height = typeof props.height === 'number' ? Math.round(props.height / 4) : 10;
+      }
+
       onBuildingClick?.({
         id: props.id || `${coords[0]},${coords[1]}`,
-        name: props.name || '未知建筑',
+        name: props.name || props.name_zh || props.name_en || '未知建筑',
         yearBuilt: props.yearBuilt || null,
-        height: props.height || Math.round((feat.properties?.['fill-extrusion-height'] || 10) / 4),
+        height,
         floors: props.floors || null,
-        type: props.type || props.buildingType || '',
+        type: props.type || props.building || '',
         description: props.description || '',
         district: props.district || '',
         lng: coords[0],
@@ -110,9 +80,8 @@ export default function MapViewer({ onBuildingClick }) {
 
     // 鼠标指针
     map.on('mousemove', (e) => {
-      const features = map.queryRenderedFeatures(e.point, {
-        layers: ['buildings-tiles', 'buildings-overpass-fill', 'buildings-period'],
-      });
+      const layers = [...buildingLayerIds.current, 'buildings-overpass-fill', 'buildings-period'];
+      const features = map.queryRenderedFeatures(e.point, { layers });
       map.getCanvas().style.cursor = features.length ? 'pointer' : '';
     });
 
@@ -149,7 +118,7 @@ function getFeatureCenter(feat) {
   return [SZ_CENTER.lng, SZ_CENTER.lat];
 }
 
-// 后台异步加载 Overpass 建筑数据（不阻塞地图）
+// 后台异步加载 Overpass 建筑数据
 async function loadOverpassBuildings(map) {
   try {
     console.log('[Maperta] Overpass 后台加载中...');
@@ -172,7 +141,7 @@ async function loadOverpassBuildings(map) {
           'fill-extrusion-base': 0,
           'fill-extrusion-opacity': 0.75,
         },
-        minzoom: 12,
+        minzoom: 14,
       });
     }
   } catch (err) {
@@ -182,7 +151,6 @@ async function loadOverpassBuildings(map) {
 
 // 加载时期对应的 GeoJSON 补充数据
 async function loadPeriodBuildings(map, period) {
-  // 清理旧时期数据层
   if (map.getLayer('buildings-period')) map.removeLayer('buildings-period');
   if (map.getSource('buildings-period')) map.removeSource('buildings-period');
 
