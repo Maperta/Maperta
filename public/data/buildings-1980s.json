@@ -1,0 +1,58 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": 6,
+      "properties": {
+        "name": "国贸大厦",
+        "yearBuilt": 1985,
+        "height": 160,
+        "floors": 50,
+        "type": "商业",
+        "district": "罗湖区",
+        "isLandmark": true,
+        "description": "国贸大厦是深圳经济特区成立后的第一座超高层建筑，1985年建成，以「三天一层楼」的深圳速度闻名全国，是改革开放的标志性建筑。"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[114.1168, 22.5420],[114.1184, 22.5420],[114.1184, 22.5432],[114.1168, 22.5432],[114.1168, 22.5420]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 12,
+      "properties": {
+        "name": "深圳发展中心",
+        "yearBuilt": 1988,
+        "height": 165,
+        "floors": 43,
+        "type": "商业",
+        "district": "罗湖区",
+        "description": "深圳发展中心大厦是80年代深圳现代化商务建筑的代表，位于罗湖区人民南路。"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[114.1102, 22.5393],[114.1116, 22.5393],[114.1116, 22.5403],[114.1102, 22.5403],[114.1102, 22.5393]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 14,
+      "properties": {
+        "name": "罗湖口岸大楼",
+        "yearBuilt": 1985,
+        "height": 15,
+        "floors": 2,
+        "type": "交通",
+        "district": "罗湖区",
+        "isLandmark": true,
+        "description": "罗湖口岸是中国最繁忙的陆路通关口岸之一，连接深圳与香港。口岸大楼建于1985年，见证了深港两地的交流发展历程。"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[114.1120, 22.5315],[114.1140, 22.5315],[114.1140, 22.5328],[114.1120, 22.5328],[114.1120, 22.5315]]]
+      }
+    }
+  ]
+}
