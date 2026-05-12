@@ -22,12 +22,27 @@ const STYLES = {
 
 const DEFAULT_STYLE = 'positron';
 
+// 建筑高度随 zoom 插值：远看降低高度提升性能，近看显示真实高度
+const HEIGHT_EXPRESSION = [
+  'interpolate', ['linear'], ['zoom'],
+  13, ['*', ['get', 'render_height'], 0.4],
+  14, ['*', ['get', 'render_height'], 0.7],
+  15, ['get', 'render_height'],
+];
+
+// 透明度随 zoom 插值
+const OPACITY_EXPRESSION = [
+  'interpolate', ['linear'], ['zoom'],
+  13, 0.5,
+  14, 0.75,
+  15, 0.85,
+];
+
 export default function MapViewer({ onBuildingClick }) {
   const mapContainer = useRef(null);
   const mapRef = useRef(null);
   const [currentStyle, setCurrentStyle] = useState(DEFAULT_STYLE);
 
-  // 初始化地图
   useEffect(() => {
     if (mapRef.current) return;
 
@@ -48,7 +63,6 @@ export default function MapViewer({ onBuildingClick }) {
       setupBuildings(map);
     });
 
-    // 切换风格后重新添加建筑图层
     map.on('styledata', (e) => {
       if (e.dataType === 'style' && map.isStyleLoaded()) {
         setupBuildings(map);
@@ -103,7 +117,6 @@ export default function MapViewer({ onBuildingClick }) {
     };
   }, []);
 
-  // 切换地图风格
   const handleStyleChange = useCallback((key) => {
     if (key === currentStyle) return;
     setCurrentStyle(key);
@@ -118,7 +131,6 @@ export default function MapViewer({ onBuildingClick }) {
   );
 }
 
-// 风格切换按钮
 function StyleSwitcher({ current, onSelect }) {
   return (
     <div className="absolute top-3 right-3 z-10 flex gap-1">
@@ -140,12 +152,9 @@ function StyleSwitcher({ current, onSelect }) {
   );
 }
 
-// 获取 feature 中心坐标
 function getFeatureCenter(feat) {
   const geom = feat.geometry;
-  if (geom?.type === 'Point') {
-    return geom.coordinates;
-  }
+  if (geom?.type === 'Point') return geom.coordinates;
   if (geom?.type === 'Polygon' && geom.coordinates?.[0]) {
     const ring = geom.coordinates[0];
     const lng = ring.reduce((a, c) => a + c[0], 0) / ring.length;
@@ -155,14 +164,15 @@ function getFeatureCenter(feat) {
   return [SZ_CENTER.lng, SZ_CENTER.lat];
 }
 
-// 添加 OpenFreeMap 3D 建筑图层 + Overpass 补充
 function setupBuildings(map) {
-  // OpenFreeMap 矢量瓦片 → 3D 建筑
+  // OpenFreeMap 3D 建筑图层
   if (!map.getSource('openfreemap')) {
     map.addSource('openfreemap', {
       type: 'vector',
       url: 'https://tiles.openfreemap.org/planet',
     });
+
+    // 先用高度 0 添加图层，等瓦片加载后动画升起
     map.addLayer({
       id: 'buildings-openfreemap',
       type: 'fill-extrusion',
@@ -171,17 +181,49 @@ function setupBuildings(map) {
       filter: ['!=', ['get', 'hide_3d'], true],
       paint: {
         'fill-extrusion-color': '#d8d8d8',
-        'fill-extrusion-height': ['get', 'render_height'],
-        'fill-extrusion-base': ['get', 'render_min_height'],
-        'fill-extrusion-opacity': 0.85,
+        'fill-extrusion-height': 0,
+        'fill-extrusion-base': 0,
+        'fill-extrusion-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0.5, 14, 0.75, 15, 0.85],
       },
-      minzoom: 14,
+      minzoom: 13,
     });
-    console.log('[Maperta] OpenFreeMap 3D 建筑图层已添加');
+
+    // 设置 height 过渡动画：2 秒升起
+    map.setPaintProperty('buildings-openfreemap', 'fill-extrusion-height-transition', {
+      duration: 2000,
+    });
+
+    // 等首批瓦片加载完成后触发升起动画
+    triggerRiseAnimation(map);
   }
 
-  // Overpass 补充数据
+  // Overpass 补充数据（也带升起动画）
   loadOverpassBuildings(map);
+}
+
+// 监听瓦片加载，触发建筑升起动画
+function triggerRiseAnimation(map) {
+  let risen = false;
+
+  const doRise = () => {
+    if (risen) return;
+    risen = true;
+    map.off('sourcedata', onSourceData);
+
+    map.setPaintProperty('buildings-openfreemap', 'fill-extrusion-height', HEIGHT_EXPRESSION);
+    console.log('[Maperta] 建筑升起动画触发');
+  };
+
+  const onSourceData = (e) => {
+    if (e.sourceId === 'openfreemap' && e.isSourceLoaded) {
+      doRise();
+    }
+  };
+
+  map.on('sourcedata', onSourceData);
+
+  // 兜底：5 秒后无论如何触发
+  setTimeout(doRise, 5000);
 }
 
 // 后台异步加载 Overpass 建筑数据
@@ -197,18 +239,32 @@ async function loadOverpassBuildings(map) {
 
     if (!map.getSource('buildings-overpass')) {
       map.addSource('buildings-overpass', { type: 'geojson', data });
+
+      // 先以高度 0 添加，再动画升起
       map.addLayer({
         id: 'buildings-overpass-fill',
         type: 'fill-extrusion',
         source: 'buildings-overpass',
         paint: {
           'fill-extrusion-color': '#ccc',
-          'fill-extrusion-height': ['get', 'height'],
+          'fill-extrusion-height': 0,
           'fill-extrusion-base': 0,
-          'fill-extrusion-opacity': 0.7,
+          'fill-extrusion-opacity': 0,
         },
-        minzoom: 14,
+        minzoom: 13,
       });
+
+      map.setPaintProperty('buildings-overpass-fill', 'fill-extrusion-height-transition', {
+        duration: 2000,
+      });
+
+      // 延迟触发 Overpass 建筑升起
+      setTimeout(() => {
+        if (map.getLayer('buildings-overpass-fill')) {
+          map.setPaintProperty('buildings-overpass-fill', 'fill-extrusion-height', ['get', 'height']);
+          map.setPaintProperty('buildings-overpass-fill', 'fill-extrusion-opacity', 0.7);
+        }
+      }, 300);
     }
   } catch (err) {
     console.warn('[Maperta] Overpass 加载失败:', err.message);
