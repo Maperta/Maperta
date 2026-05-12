@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useI18n } from '../lib/i18n';
 
 export default function DistrictDetailPage() {
   const { slug } = useParams();
+  const { t } = useI18n();
   const [district, setDistrict] = useState(null);
   const [buildings, setBuildings] = useState([]);
 
@@ -32,7 +34,7 @@ export default function DistrictDetailPage() {
   if (!district) {
     return (
       <div className="h-full flex items-center justify-center text-gray-400">
-        加载中...
+        {t('bldg_loading')}
       </div>
     );
   }
@@ -42,40 +44,34 @@ export default function DistrictDetailPage() {
       <div className="bg-gradient-to-b from-[#1a1a2e] to-[#0f0f1a] px-8 py-12">
         <div className="max-w-4xl mx-auto">
           <Link to="/districts" className="text-gray-500 text-sm no-underline hover:text-gray-300">
-            ← 返回各区列表
+            {t('district_back')}
           </Link>
           <h1 className="text-4xl font-bold text-white m-0 mt-2">{district.name}</h1>
         </div>
       </div>
 
       <div className="max-w-4xl mx-auto px-8 py-8">
-        {/* 数据卡片 */}
         <div className="grid grid-cols-3 gap-4 mb-8">
-          <StatCard label="设立时间" value={`${district.established}年`} />
-          <StatCard label="面积" value={`${district.area}km²`} />
-          <StatCard label="人口" value={`${district.population}万`} />
+          <StatCard label={t('district_established_label')} value={`${district.established}`} />
+          <StatCard label={t('district_area')} value={`${district.area}km²`} />
+          <StatCard label={t('district_population')} value={`${district.population}万`} />
         </div>
 
-        {/* 区域介绍 */}
         <section className="mb-8">
-          <h2 className="text-xl font-bold text-white mb-3">区域简介</h2>
+          <h2 className="text-xl font-bold text-white mb-3">{t('district_intro')}</h2>
           <p className="text-gray-300 leading-relaxed">{district.description}</p>
         </section>
 
-        {/* 历史沿革 */}
         <section className="mb-8">
-          <h2 className="text-xl font-bold text-white mb-3">历史沿革</h2>
+          <h2 className="text-xl font-bold text-white mb-3">{t('district_history_label')}</h2>
           <p className="text-gray-300 leading-relaxed whitespace-pre-line">
             {district.history}
           </p>
         </section>
 
-        {/* 区内建筑 */}
         {buildings.length > 0 && (
           <section className="mb-8">
-            <h2 className="text-xl font-bold text-white mb-4">
-              标志性建筑
-            </h2>
+            <h2 className="text-xl font-bold text-white mb-4">{t('district_buildings')}</h2>
             <div className="space-y-3">
               {buildings.map((b) => (
                 <Link
@@ -87,7 +83,7 @@ export default function DistrictDetailPage() {
                   <div>
                     <h4 className="text-white font-medium">{b.name}</h4>
                     <span className="text-gray-500 text-sm">
-                      {b.yearBuilt}年建成 · {b.height}米 · {b.type}
+                      {b.yearBuilt}{t('overview_established')} · {b.height}{t('bldg_meters')} · {b.type}
                     </span>
                   </div>
                 </Link>

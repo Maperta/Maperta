@@ -9,6 +9,7 @@ import DistrictDetailPage from './pages/DistrictDetailPage';
 import CommunityPage from './pages/CommunityPage';
 import LoginPage from './pages/LoginPage';
 import ProfilePage from './pages/ProfilePage';
+import AdminEditorPage from './pages/AdminEditorPage';
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/community" element={<CommunityPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/admin/editor" element={<AdminEditorPage />} />
         </Routes>
       </Layout>
     </BrowserRouter>

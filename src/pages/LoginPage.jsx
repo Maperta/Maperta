@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { loginUser, registerUser } from '../lib/storage';
+import { useI18n } from '../lib/i18n';
 
 export default function LoginPage() {
+  const { t } = useI18n();
   const [isRegister, setIsRegister] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -14,7 +16,7 @@ export default function LoginPage() {
     setError('');
 
     if (!username || !password) {
-      setError('请填写用户名和密码');
+      setError(t('login_error_empty'));
       return;
     }
 
@@ -23,14 +25,14 @@ export default function LoginPage() {
       if (result.success) {
         navigate('/');
       } else {
-        setError(result.error);
+        setError(t('login_error_duplicate'));
       }
     } else {
       const result = loginUser(username, password);
       if (result.success) {
         navigate('/');
       } else {
-        setError(result.error);
+        setError(t('login_error_wrong'));
       }
     }
   };
@@ -39,7 +41,7 @@ export default function LoginPage() {
     <div className="h-full flex items-center justify-center">
       <div className="w-96 bg-[#1a1a2e] border border-white/10 rounded-xl p-8">
         <h1 className="text-2xl font-bold text-white text-center mb-6">
-          {isRegister ? '注册' : '登录'}
+          {isRegister ? t('register_title') : t('login_title')}
         </h1>
 
         {error && (
@@ -50,21 +52,21 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">用户名</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('login_username')}</label>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="请输入用户名"
+              placeholder={t('login_placeholder_username')}
               className="w-full bg-[#0f0f1a] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">密码</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('login_password')}</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="请输入密码"
+              placeholder={t('login_placeholder_password')}
               className="w-full bg-[#0f0f1a] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm"
             />
           </div>
@@ -72,7 +74,7 @@ export default function LoginPage() {
             type="submit"
             className="w-full py-2.5 bg-[#e94560] text-white rounded-lg font-medium cursor-pointer border-none hover:bg-[#c0392b] transition-colors"
           >
-            {isRegister ? '注册' : '登录'}
+            {isRegister ? t('register_btn') : t('login_btn')}
           </button>
         </form>
 
@@ -84,14 +86,12 @@ export default function LoginPage() {
             }}
             className="text-sm text-gray-400 hover:text-white bg-transparent border-none cursor-pointer"
           >
-            {isRegister ? '已有账号？点此登录' : '没有账号？点此注册'}
+            {isRegister ? t('login_switch_login') : t('login_switch_register')}
           </button>
         </div>
 
         <div className="text-center mt-4 pt-4 border-t border-white/10">
-          <p className="text-xs text-gray-600">
-            注意：这是一个模拟登录系统，数据存储在浏览器本地。
-          </p>
+          <p className="text-xs text-gray-600">{t('login_notice')}</p>
         </div>
       </div>
     </div>

@@ -1,36 +1,38 @@
 import { Link, useLocation } from 'react-router-dom';
 import { getCurrentUser, logoutUser } from '../lib/storage';
+import { useI18n } from '../lib/i18n';
 import { useState, useEffect } from 'react';
-
-const navLinks = [
-  { to: '/', label: '3D地图' },
-  { to: '/shenzhen/overview', label: '深圳概览' },
-  {
-    label: '城市系统',
-    children: [
-      { to: '/shenzhen/transportation', label: '交通系统' },
-      { to: '/shenzhen/economy', label: '经济发展' },
-      { to: '/shenzhen/culture', label: '文化教育' },
-      { to: '/shenzhen/planning', label: '城市规划' },
-    ],
-  },
-  {
-    label: '各区历史',
-    children: [
-      { to: '/districts/nanshan', label: '南山区' },
-      { to: '/districts/futian', label: '福田区' },
-      { to: '/districts/luohu', label: '罗湖区' },
-      { to: '/districts/baoan', label: '宝安区' },
-      { to: '/districts/longgang', label: '龙岗区' },
-    ],
-  },
-  { to: '/community', label: '社区' },
-];
 
 export default function Layout({ children }) {
   const location = useLocation();
+  const { t, lang, toggleLang } = useI18n();
   const [user, setUser] = useState(getCurrentUser());
   const [openDropdown, setOpenDropdown] = useState(null);
+
+  const navLinks = [
+    { to: '/', label: t('nav_3dmap') },
+    { to: '/shenzhen/overview', label: t('nav_overview') },
+    {
+      label: t('nav_systems'),
+      children: [
+        { to: '/shenzhen/transportation', label: lang === 'zh' ? '交通系统' : 'Transportation' },
+        { to: '/shenzhen/economy', label: lang === 'zh' ? '经济发展' : 'Economy' },
+        { to: '/shenzhen/culture', label: lang === 'zh' ? '文化教育' : 'Culture & Education' },
+        { to: '/shenzhen/planning', label: lang === 'zh' ? '城市规划' : 'Urban Planning' },
+      ],
+    },
+    {
+      label: t('nav_districts'),
+      children: [
+        { to: '/districts/nanshan', label: lang === 'zh' ? '南山区' : 'Nanshan' },
+        { to: '/districts/futian', label: lang === 'zh' ? '福田区' : 'Futian' },
+        { to: '/districts/luohu', label: lang === 'zh' ? '罗湖区' : 'Luohu' },
+        { to: '/districts/baoan', label: lang === 'zh' ? '宝安区' : "Bao'an" },
+        { to: '/districts/longgang', label: lang === 'zh' ? '龙岗区' : 'Longgang' },
+      ],
+    },
+    { to: '/community', label: t('nav_community') },
+  ];
 
   useEffect(() => {
     setUser(getCurrentUser());
@@ -43,15 +45,12 @@ export default function Layout({ children }) {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
       <header className="h-12 bg-[#0a0a1a] border-b border-white/10 flex items-center px-4 shrink-0 z-50">
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 mr-8 no-underline">
+        <Link to="/" className="flex items-center gap-2 mr-6 no-underline">
           <span className="text-xl">🗺️</span>
           <span className="text-white font-bold text-lg tracking-wide">Maperta</span>
         </Link>
 
-        {/* Nav */}
         <nav className="flex items-center gap-1 flex-1">
           {navLinks.map((item) =>
             item.to ? (
@@ -74,7 +73,7 @@ export default function Layout({ children }) {
                 onMouseEnter={() => setOpenDropdown(item.label)}
                 onMouseLeave={() => setOpenDropdown(null)}
               >
-                <button className="px-3 py-1.5 rounded text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+                <button className="px-3 py-1.5 rounded text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors bg-transparent border-none cursor-pointer">
                   {item.label}
                   <span className="ml-1 text-xs">▾</span>
                 </button>
@@ -96,21 +95,33 @@ export default function Layout({ children }) {
           )}
         </nav>
 
-        {/* User area */}
-        <div className="flex items-center gap-2">
+        {/* Tools + Language switcher + User area */}
+        <div className="flex items-center gap-3">
+          <Link
+            to="/admin/editor"
+            className="text-xs text-gray-500 hover:text-gray-300 no-underline"
+            title="内容编辑器"
+          >
+            ✏️
+          </Link>
+          <button
+            onClick={toggleLang}
+            className="text-xs text-gray-400 hover:text-white bg-white/5 border border-white/10 rounded px-2 py-1 cursor-pointer transition-colors"
+            title={t('lang_switch')}
+          >
+            🌐 {t('lang_switch')}
+          </button>
+
           {user ? (
             <div className="flex items-center gap-3">
-              <Link
-                to="/profile"
-                className="text-sm text-gray-400 hover:text-white no-underline"
-              >
+              <Link to="/profile" className="text-sm text-gray-400 hover:text-white no-underline">
                 👤 {user.username}
               </Link>
               <button
                 onClick={handleLogout}
                 className="text-xs text-gray-500 hover:text-red-400 bg-transparent border border-white/10 rounded px-2 py-1 cursor-pointer"
               >
-                退出
+                {t('nav_logout')}
               </button>
             </div>
           ) : (
@@ -118,13 +129,12 @@ export default function Layout({ children }) {
               to="/login"
               className="text-sm text-gray-400 hover:text-white no-underline border border-white/10 rounded px-3 py-1"
             >
-              登录
+              {t('nav_login')}
             </Link>
           )}
         </div>
       </header>
 
-      {/* Main content */}
       <main className="flex-1 overflow-hidden">{children}</main>
     </div>
   );

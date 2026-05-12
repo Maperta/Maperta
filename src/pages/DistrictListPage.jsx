@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useI18n } from '../lib/i18n';
 
 export default function DistrictListPage() {
+  const { t } = useI18n();
   const [districts, setDistricts] = useState([]);
 
   useEffect(() => {
@@ -15,10 +17,8 @@ export default function DistrictListPage() {
     <div className="h-full overflow-y-auto">
       <div className="bg-gradient-to-b from-[#1a1a2e] to-[#0f0f1a] px-8 py-12">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl font-bold text-white m-0">各区历史</h1>
-          <p className="text-gray-400 text-lg mt-3">
-            深圳下辖9个行政区+1个新区，每个区都有其独特的发展故事
-          </p>
+          <h1 className="text-4xl font-bold text-white m-0">{t('district_title')}</h1>
+          <p className="text-gray-400 text-lg mt-3">{t('district_subtitle')}</p>
         </div>
       </div>
 
@@ -35,9 +35,9 @@ export default function DistrictListPage() {
                 {d.description}
               </p>
               <div className="flex gap-3 text-xs text-gray-500">
-                <span>设立于 {d.established}年</span>
-                <span>面积 {d.area}km²</span>
-                <span>人口 {d.population}万</span>
+                <span>{t('district_established')} {d.established}</span>
+                <span>{t('district_area')} {d.area}km²</span>
+                <span>{t('district_population')} {d.population}万</span>
               </div>
             </Link>
           ))}

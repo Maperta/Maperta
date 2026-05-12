@@ -1,26 +1,26 @@
 import useStore from '../../lib/store';
-
-const periods = [
-  { id: '1980s', label: '八十年代', range: '1980-1989' },
-  { id: '1990s', label: '九十年代', range: '1990-1999' },
-  { id: '2000s', label: '零零年代', range: '2000-2009' },
-  { id: 'present', label: '现在', range: '2010-至今' },
-];
+import { useI18n } from '../../lib/i18n';
 
 export default function TimelineControl() {
   const currentPeriod = useStore((s) => s.currentPeriod);
   const setPeriod = useStore((s) => s.setPeriod);
+  const { t } = useI18n();
+
+  const periods = [
+    { id: '1980s', label: t('home_period_1980s'), range: t('home_range_1980s') },
+    { id: '1990s', label: t('home_period_1990s'), range: t('home_range_1990s') },
+    { id: '2000s', label: t('home_period_2000s'), range: t('home_range_2000s') },
+    { id: 'present', label: t('home_period_present'), range: t('home_range_present') },
+  ];
 
   return (
     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10">
       <div className="bg-[#0a0a1a]/90 backdrop-blur-md border border-white/15 rounded-xl px-4 py-3 flex items-center gap-1 shadow-2xl">
-        {/* 标签 */}
         <span className="text-gray-400 text-xs mr-2 font-medium tracking-wide">
-          时间轴
+          {t('home_timeline')}
         </span>
 
-        {/* 时期按钮 */}
-        {periods.map((p, i) => (
+        {periods.map((p) => (
           <button
             key={p.id}
             onClick={() => setPeriod(p.id)}
@@ -36,7 +36,6 @@ export default function TimelineControl() {
           </button>
         ))}
 
-        {/* 当前时期指示器 */}
         <div className="ml-3 pl-3 border-l border-white/10">
           <span className="text-xs text-gray-500">
             {periods.find((p) => p.id === currentPeriod)?.label}
