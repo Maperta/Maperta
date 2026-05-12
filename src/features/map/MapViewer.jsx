@@ -22,26 +22,30 @@ const STYLES = {
 
 const DEFAULT_STYLE = 'positron';
 
-// 建筑高度随 zoom 渐变：远看低矮，近看真实高度
-const HEIGHT_PAINT = [
+// Overture Maps PMTiles 建筑数据源
+const OVERTURE_TILES =
+  'pmtiles://https://overturemaps-tiles-us-west-2-beta.s3.amazonaws.com/2025-07-23/buildings.pmtiles';
+
+// GeoJSON 建筑高度（zoom 10-12，全市视角）
+const GEOJSON_HEIGHT = [
   'interpolate', ['linear'], ['zoom'],
-  13, ['*', ['get', 'render_height'], 0.4],
-  14, ['*', ['get', 'render_height'], 0.7],
-  15, ['get', 'render_height'],
+  10, ['*', ['get', 'h'], 0.3],
+  11, ['*', ['get', 'h'], 0.5],
+  12, ['*', ['get', 'h'], 0.8],
 ];
 
-// 透明度随 zoom 渐变：远看更透，近看清晰
-const OPACITY_PAINT = [
+// Overture 瓦片建筑高度（zoom 13+）
+const TILE_HEIGHT = [
   'interpolate', ['linear'], ['zoom'],
-  13, 0.55,
-  14, 0.75,
-  15, 0.85,
+  13, ['*', ['coalesce', ['get', 'height'], ['*', ['get', 'num_floors'], 3], 10], 0.4],
+  14, ['*', ['coalesce', ['get', 'height'], ['*', ['get', 'num_floors'], 3], 10], 0.7],
+  15, ['coalesce', ['get', 'height'], ['*', ['get', 'num_floors'], 3], 10],
 ];
 
 export default function MapViewer({ onBuildingClick }) {
   const mapContainer = useRef(null);
   const mapRef = useRef(null);
-  const animTimer = useRef(null);
+  const tileRiseTimer = useRef(null);
   const [currentStyle, setCurrentStyle] = useState(DEFAULT_STYLE);
 
   useEffect(() => {
@@ -51,8 +55,8 @@ export default function MapViewer({ onBuildingClick }) {
       container: mapContainer.current,
       style: STYLES[DEFAULT_STYLE].url,
       center: [SZ_CENTER.lng, SZ_CENTER.lat],
-      zoom: 14,
-      pitch: 60,
+      zoom: 11,
+      pitch: 50,
       bearing: 20,
       antialias: true,
     });
@@ -60,20 +64,18 @@ export default function MapViewer({ onBuildingClick }) {
     map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
 
-    // 初始加载
-    map.on('load', () => addBuildingLayers(map, animTimer));
+    map.on('load', () => addAllLayers(map, tileRiseTimer));
 
-    // 切换风格后重新添加
     map.on('styledata', (e) => {
       if (e.dataType === 'style' && map.isStyleLoaded()) {
-        addBuildingLayers(map, animTimer);
+        addAllLayers(map, tileRiseTimer);
       }
     });
 
     // 点击建筑
     map.on('click', (e) => {
       const features = map.queryRenderedFeatures(e.point, {
-        layers: ['buildings-openfreemap', 'buildings-overpass'],
+        layers: ['buildings-geojson', 'buildings-overture', 'buildings-overpass'],
       });
       if (!features.length) return;
 
@@ -82,19 +84,21 @@ export default function MapViewer({ onBuildingClick }) {
       const coords = getFeatureCenter(feat);
 
       let height = 10;
-      if (props.render_height) {
-        height = Math.round(props.render_height);
-      } else if (props.height) {
-        height = typeof props.height === 'number' ? Math.round(props.height) : 10;
+      if (props.height) {
+        height = Math.round(props.height);
+      } else if (props.h) {
+        height = Math.round(props.h);
+      } else if (props.num_floors) {
+        height = props.num_floors * 3;
       }
 
       onBuildingClick?.({
         id: props.id || `${coords[0]},${coords[1]}`,
-        name: props.name || props.name_zh || props.name_en || '未知建筑',
+        name: props.name || props.n || props.name_zh || '未知建筑',
         yearBuilt: props.yearBuilt || null,
         height,
-        floors: props.floors || null,
-        type: props.type || props.building || '',
+        floors: props.num_floors || props.floors || null,
+        type: props.subtype || props.class || props.building || '',
         description: props.description || '',
         district: props.district || '',
         lng: coords[0],
@@ -105,7 +109,7 @@ export default function MapViewer({ onBuildingClick }) {
     // 鼠标指针
     map.on('mousemove', (e) => {
       const features = map.queryRenderedFeatures(e.point, {
-        layers: ['buildings-openfreemap', 'buildings-overpass'],
+        layers: ['buildings-geojson', 'buildings-overture', 'buildings-overpass'],
       });
       map.getCanvas().style.cursor = features.length ? 'pointer' : '';
     });
@@ -113,7 +117,7 @@ export default function MapViewer({ onBuildingClick }) {
     mapRef.current = map;
 
     return () => {
-      clearTimeout(animTimer.current);
+      clearTimeout(tileRiseTimer.current);
       map.remove();
       mapRef.current = null;
     };
@@ -122,7 +126,7 @@ export default function MapViewer({ onBuildingClick }) {
   const handleStyleChange = useCallback((key) => {
     if (key === currentStyle) return;
     setCurrentStyle(key);
-    clearTimeout(animTimer.current);
+    clearTimeout(tileRiseTimer.current);
     mapRef.current?.setStyle(STYLES[key].url);
   }, [currentStyle]);
 
@@ -170,52 +174,84 @@ function getFeatureCenter(feat) {
 // ═══════════════════════════════════════════
 // 添加所有建筑图层
 // ═══════════════════════════════════════════
-function addBuildingLayers(map, animTimer) {
-  addOpenFreeMapLayer(map, animTimer);
-  addOverpassLayer(map);
+function addAllLayers(map, tileRiseTimer) {
+  addGeoJSONLayer(map);            // 静态数据 — zoom 10-12 全市视角
+  addOvertureLayer(map, tileRiseTimer); // Overture Maps — zoom 13+ 细节建筑
+  addOverpassLayer(map);           // Overpass 补充 — zoom 13+
 }
 
-// OpenFreeMap 矢量瓦片 → 3D 建筑（主数据源）
-function addOpenFreeMapLayer(map, animTimer) {
-  if (map.getSource('openfreemap')) return;
+// 图层1：静态GeoJSON（zoom 10-12.5，全市建筑一览）
+function addGeoJSONLayer(map) {
+  if (map.getSource('sz-buildings')) return;
 
-  map.addSource('openfreemap', {
-    type: 'vector',
-    url: 'https://tiles.openfreemap.org/planet',
+  map.addSource('sz-buildings', {
+    type: 'geojson',
+    data: '/data/sz-buildings.json',
   });
 
-  // 先用高度 0 添加，再用动画升起
   map.addLayer({
-    id: 'buildings-openfreemap',
+    id: 'buildings-geojson',
     type: 'fill-extrusion',
-    source: 'openfreemap',
+    source: 'sz-buildings',
+    paint: {
+      'fill-extrusion-color': '#d8d8d8',
+      'fill-extrusion-height': GEOJSON_HEIGHT,
+      'fill-extrusion-base': 0,
+      'fill-extrusion-opacity': [
+        'interpolate', ['linear'], ['zoom'],
+        10, 0.4,
+        11, 0.55,
+        12, 0.7,
+      ],
+    },
+    minzoom: 10,
+    maxzoom: 13,
+  });
+
+  console.log('[Maperta] 静态全市建筑图层已添加 (zoom 10-12)');
+}
+
+// 图层2：Overture Maps PMTiles（zoom 13+，带高度数据的建筑）
+function addOvertureLayer(map, tileRiseTimer) {
+  if (map.getSource('overture-buildings')) return;
+
+  map.addSource('overture-buildings', {
+    type: 'vector',
+    url: OVERTURE_TILES,
+  });
+
+  map.addLayer({
+    id: 'buildings-overture',
+    type: 'fill-extrusion',
+    source: 'overture-buildings',
     'source-layer': 'building',
-    filter: ['!=', ['get', 'hide_3d'], true],
     paint: {
       'fill-extrusion-color': '#d5d5d5',
       'fill-extrusion-height': 0,
       'fill-extrusion-base': 0,
-      'fill-extrusion-opacity': OPACITY_PAINT,
+      'fill-extrusion-opacity': [
+        'interpolate', ['linear'], ['zoom'],
+        13, 0.5,
+        14, 0.7,
+        15, 0.85,
+      ],
     },
     minzoom: 13,
   });
 
-  // 设置 2 秒过渡动画
-  map.setPaintProperty('buildings-openfreemap', 'fill-extrusion-height-transition', {
-    duration: 2000,
-  });
+  // 升起动画
+  map.setPaintProperty('buildings-overture', 'fill-extrusion-height-transition', { duration: 2000 });
 
-  // 简单延迟触发升起（等首批瓦片到达）
-  clearTimeout(animTimer.current);
-  animTimer.current = setTimeout(() => {
-    if (map.getLayer('buildings-openfreemap')) {
-      map.setPaintProperty('buildings-openfreemap', 'fill-extrusion-height', HEIGHT_PAINT);
-      console.log('[Maperta] 建筑升起动画触发');
+  clearTimeout(tileRiseTimer.current);
+  tileRiseTimer.current = setTimeout(() => {
+    if (map.getLayer('buildings-overture')) {
+      map.setPaintProperty('buildings-overture', 'fill-extrusion-height', TILE_HEIGHT);
+      console.log('[Maperta] Overture 建筑升起动画触发');
     }
-  }, 600);
+  }, 800);
 }
 
-// Overpass 补充建筑数据
+// 图层3：Overpass 补充数据（zoom 13+）
 function addOverpassLayer(map) {
   if (map.getSource('buildings-overpass')) return;
 
@@ -229,7 +265,7 @@ function addOverpassLayer(map) {
     type: 'fill-extrusion',
     source: 'buildings-overpass',
     paint: {
-      'fill-extrusion-color': '#ccc',
+      'fill-extrusion-color': '#cfcfcf',
       'fill-extrusion-height': 0,
       'fill-extrusion-base': 0,
       'fill-extrusion-opacity': 0,
@@ -237,36 +273,26 @@ function addOverpassLayer(map) {
     minzoom: 13,
   });
 
-  map.setPaintProperty('buildings-overpass', 'fill-extrusion-height-transition', {
-    duration: 2000,
-  });
+  map.setPaintProperty('buildings-overpass', 'fill-extrusion-height-transition', { duration: 2000 });
 
-  // 后台异步加载
   loadOverpassData(map);
 }
 
 async function loadOverpassData(map) {
   try {
-    console.log('[Maperta] Overpass 后台加载中...');
     const data = await fetchShenzhenBuildings();
-    if (!data?.features?.length) {
-      console.log('[Maperta] Overpass 无数据返回');
-      return;
-    }
+    if (!data?.features?.length) return;
 
     console.log(`[Maperta] Overpass 返回 ${data.features.length} 栋建筑`);
-
     const src = map.getSource('buildings-overpass');
     if (src) src.setData(data);
 
-    // 升起动画
     setTimeout(() => {
       if (map.getLayer('buildings-overpass')) {
         map.setPaintProperty('buildings-overpass', 'fill-extrusion-height', ['get', 'height']);
         map.setPaintProperty('buildings-overpass', 'fill-extrusion-opacity', 0.7);
       }
     }, 300);
-
   } catch (err) {
     console.warn('[Maperta] Overpass 加载失败:', err.message);
   }
