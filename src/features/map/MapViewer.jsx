@@ -76,33 +76,11 @@ export default function MapViewer({ onBuildingClick }) {
         minzoom: 12,
       });
 
-      // 3. Overpass 补充数据（深圳范围建筑）
-      console.log('[Maperta] 正在从 Overpass 获取深圳建筑数据...');
-      const overpassData = await fetchShenzhenBuildings();
-      if (overpassData && overpassData.features?.length > 0) {
-        console.log(`[Maperta] Overpass 返回 ${overpassData.features.length} 栋建筑`);
-
-        map.addSource('buildings-overpass', {
-          type: 'geojson',
-          data: overpassData,
-        });
-
-        map.addLayer({
-          id: 'buildings-overpass-fill',
-          type: 'fill-extrusion',
-          source: 'buildings-overpass',
-          paint: {
-            'fill-extrusion-color': '#c8c8c8',
-            'fill-extrusion-height': ['get', 'height'],
-            'fill-extrusion-base': 0,
-            'fill-extrusion-opacity': 0.75,
-          },
-          minzoom: 12,
-        });
-      }
-
-      // 4. 加载时间轴补充数据
+      // 3. 加载时间轴补充数据（不阻塞，立即执行）
       loadPeriodBuildings(map, currentPeriod);
+
+      // 4. Overpass 补充数据（异步后台加载，不阻塞地图）
+      loadOverpassBuildings(map);
     });
 
     // 点击建筑（两个图层都检测）
@@ -169,6 +147,37 @@ function getFeatureCenter(feat) {
     return [lng, lat];
   }
   return [SZ_CENTER.lng, SZ_CENTER.lat];
+}
+
+// 后台异步加载 Overpass 建筑数据（不阻塞地图）
+async function loadOverpassBuildings(map) {
+  try {
+    console.log('[Maperta] Overpass 后台加载中...');
+    const data = await fetchShenzhenBuildings();
+    if (!data || !data.features?.length) return;
+
+    console.log(`[Maperta] Overpass 返回 ${data.features.length} 栋建筑`);
+
+    if (map.getSource('buildings-overpass')) {
+      map.getSource('buildings-overpass').setData(data);
+    } else {
+      map.addSource('buildings-overpass', { type: 'geojson', data });
+      map.addLayer({
+        id: 'buildings-overpass-fill',
+        type: 'fill-extrusion',
+        source: 'buildings-overpass',
+        paint: {
+          'fill-extrusion-color': '#c8c8c8',
+          'fill-extrusion-height': ['get', 'height'],
+          'fill-extrusion-base': 0,
+          'fill-extrusion-opacity': 0.75,
+        },
+        minzoom: 12,
+      });
+    }
+  } catch (err) {
+    console.warn('[Maperta] Overpass 加载失败:', err.message);
+  }
 }
 
 // 加载时期对应的 GeoJSON 补充数据
